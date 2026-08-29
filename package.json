@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~54.0.37",
+    "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.14",
     "expo-linking": "~8.0.12",
     "expo-share-intent": "^5.1.1",

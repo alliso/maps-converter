@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import * as Clipboard from "expo-clipboard";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -32,9 +33,13 @@ export function ShareTargetScreen() {
   const [navigate, setNavigate] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
+  // Kept verbatim so a failed parse still has something to hand back to the
+  // user: we may not have found a URL in it, but they can paste it themselves.
+  const [shared, setShared] = useState("");
 
   const analyse = useCallback(async (content: string | null | undefined) => {
     setStatus({ kind: "loading" });
+    setShared(content?.trim() ?? "");
     const result = await resolveSharedContent(content);
     setStatus(result.ok ? { kind: "ready", place: result.place } : { kind: "error", result });
   }, []);
@@ -103,6 +108,9 @@ export function ShareTargetScreen() {
               {status.result.url}
             </Text>
           ) : null}
+          {/* The way out of a failure: copy it and paste it into the maps app by
+              hand, rather than going back to the share sheet empty handed. */}
+          <CopyButton value={status.result.url || shared} theme={theme} />
           <Pressable
             onPress={() => {
               setStatus({ kind: "idle" });
@@ -176,6 +184,40 @@ function PlaceCard({ place, theme }: { place: Place; theme: Theme }) {
         </Text>
       )}
     </View>
+  );
+}
+
+/**
+ * Copying gives no visible feedback of its own, so the label doubles as the
+ * confirmation and reverts on its own.
+ */
+function CopyButton({ value, theme }: { value: string; theme: Theme }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const copy = async () => {
+    await Clipboard.setStringAsync(value);
+    setCopied(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!value) return null;
+
+  return (
+    <Pressable
+      onPress={copy}
+      style={({ pressed }) => [
+        styles.secondaryButton,
+        { borderColor: theme.border, backgroundColor: theme.card, opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <Text style={[styles.secondaryButtonText, { color: theme.accent }]}>
+        {copied ? "Copiado ✓" : "Copiar enlace"}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -303,6 +345,13 @@ const styles = StyleSheet.create({
   input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
   primaryButton: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   primaryButtonText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  secondaryButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryButtonText: { fontSize: 16, fontWeight: "600" },
   link: { fontSize: 15, textAlign: "center" },
   code: {
     fontSize: 13,
