@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Maps Converter",
+    "slug": "maps-converter",
+    "version": "0.1.0",
+    "scheme": "mapsconverter",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alliso.mapsconverter",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "maps",
+          "comgooglemaps",
+          "waze"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.alliso.mapsconverter",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-share-intent",
+        {
+          "iosShareExtensionName": "Maps Converter Share",
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1
+          },
+          "androidIntentFilters": [
+            "text/*"
+          ]
+        }
+      ],
+      "./plugins/withoutAppGroup"
+    ]
+  }
+}
