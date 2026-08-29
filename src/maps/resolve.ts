@@ -15,10 +15,16 @@ export type ResolveOptions = {
 };
 
 const DEFAULT_TIMEOUT_MS = 8000;
-/** Google serves a redirect to browsers and an app banner to everyone else. */
-const USER_AGENT =
+/**
+ * A desktop browser gets Firebase's dynamic-link interstitial, which keeps the
+ * destination in obfuscated script; a phone gets the plain 302 that names it.
+ */
+const PHONE_USER_AGENT =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+/** `share.google` does the opposite, and only spells the target out to a desktop. */
+const DESKTOP_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
-const MAPS_URL_IN_HTML = /https?:\/\/(?:www\.)?google\.[a-z.]+\/maps\/[^"'\\\s<>]+/i;
+const MAPS_URL_IN_HTML = /https?:\/\/(?:www\.|maps\.)?google\.[a-z.]+\/maps[^"'\\\s<>]*/i;
 
 /**
  * Parses shared content, expanding short links (`maps.app.goo.gl/…`) over the
@@ -91,25 +97,42 @@ async function expandIfNeeded(
 /** Follows a short link and returns the long URL it points at. */
 export async function expandShortLink(
   shortUrl: string,
-  { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch }: ResolveOptions = {},
+  options: ResolveOptions = {},
 ): Promise<string | undefined> {
+  // A HEAD as a phone is what `maps.app.goo.gl` answers with a real 302; ask as
+  // a desktop browser and Google serves an interstitial with nothing in it.
+  const head = await request(shortUrl, "HEAD", PHONE_USER_AGENT, options);
+  if (head?.url && head.url !== shortUrl) return head.url;
+
+  const response = await request(shortUrl, "GET", DESKTOP_USER_AGENT, options);
+  if (!response) return undefined;
+  if (response.url && response.url !== shortUrl) return response.url;
+
+  // Older interstitials spell the target out in the markup.
+  try {
+    const html = await response.text();
+    return html.match(MAPS_URL_IN_HTML)?.[0];
+  } catch {
+    return undefined;
+  }
+}
+
+async function request(
+  url: string,
+  method: "HEAD" | "GET",
+  userAgent: string,
+  { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch }: ResolveOptions,
+): Promise<Response | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchImpl(shortUrl, {
+    return await fetchImpl(url, {
+      method,
       redirect: "follow",
       signal: controller.signal,
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      headers: { "User-Agent": userAgent, Accept: "text/html" },
     });
-
-    // The happy path: the platform followed the redirects for us.
-    const finalUrl = response.url;
-    if (finalUrl && finalUrl !== shortUrl) return finalUrl;
-
-    // Otherwise the target is inside the interstitial page Google serves.
-    const html = await response.text();
-    return html.match(MAPS_URL_IN_HTML)?.[0];
   } catch {
     return undefined;
   } finally {

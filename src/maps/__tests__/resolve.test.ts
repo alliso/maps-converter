@@ -35,6 +35,27 @@ describe("resolveSharedContent", () => {
     expect(result.ok && result.place.coordinates?.longitude).toBeCloseTo(-3.703333, 5);
   });
 
+  it("asks as a phone, which is what maps.app.goo.gl answers with a redirect", async () => {
+    // Recorded from a real shared link: a desktop User-Agent gets Firebase's
+    // interstitial and no redirect at all, so only the phone request expands.
+    const ADDRESS_URL =
+      "https://maps.google.com/maps?q=La+mar+de+bolas,+Calle+l'Alcora,+3,+12593+Moncofa,+Castell%C3%B3&ftid=0xd601abb1acaedfb:0x4fa7493109756f75&entry=gps";
+    const SHORT_URL = "https://maps.app.goo.gl/JgRjpVmxqJLK7yCY8";
+    const userAgent = (init?: RequestInit) =>
+      String((init?.headers as Record<string, string>)?.["User-Agent"] ?? "");
+    const fetchImpl = jest.fn(async (_url: unknown, init?: RequestInit) => ({
+      url: /iPhone/.test(userAgent(init)) ? ADDRESS_URL : SHORT_URL,
+      text: async () => "<html>interstitial with no link in it</html>",
+    })) as unknown as typeof fetch;
+
+    const result = await resolveSharedContent(SHORT_URL, { fetchImpl, skipGeocoding: true });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.place.query).toBe(
+      "La mar de bolas, Calle l'Alcora, 3, 12593 Moncofa, Castelló",
+    );
+  });
+
   it("reports the link as unsupported when the network fails", async () => {
     const failing = jest.fn(async () => {
       throw new Error("offline");
