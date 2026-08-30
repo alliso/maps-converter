@@ -87,11 +87,41 @@ pero hay que subir también `expo-share-intent` según su tabla de compatibilida
 ```sh
 npm install
 npm run ios        # prebuild + pods + compilar + lanzar en el simulador
-npm test           # tests del parseo y de la construcción de URLs
+npm test           # toda la suite
+npm run test:watch
+npm run test:coverage
+npm run test:mutation
 npm run typecheck
 ```
 
 `ios/` y `android/` no se versionan: se regeneran con `npm run prebuild`.
+
+### Tests
+
+Jest sobre `jest-expo`, sin red ni simulador: el `fetch` del expansor de
+enlaces cortos y del geocodificador se inyecta (`fetchImpl`), y `Linking` y el
+portapapeles se sustituyen por mocks. La pantalla se renderiza con
+`react-test-renderer`.
+
+`npm run test:coverage` imprime el informe y escribe `coverage/lcov.info`. El
+umbral está en 95% de líneas, sentencias y funciones y 90% de ramas, así que
+una regresión de cobertura hace fallar el comando.
+
+### Tests de mutación
+
+La cobertura dice qué líneas se ejecutan, no si alguien las comprueba.
+`npm run test:mutation` lanza [StrykerJS](https://stryker-mutator.io/): altera
+el código fuente (invierte condiciones, cambia literales, vacía bloques) y
+vuelve a pasar los tests. Si la suite sigue en verde con el código roto, el
+mutante «sobrevive» y ahí hay un test que falta.
+
+Configurado en `stryker.config.json`: usa el runner de Jest con
+`coverageAnalysis: "perTest"`, así que sólo ejecuta los tests que cubren cada
+mutante (~2 min para toda la suite). El umbral de corte está en **80%**, y el
+informe navegable queda en `reports/mutation/index.html`.
+
+Los estilos y la paleta de `ShareTargetScreen.tsx` quedan fuera con comentarios
+`// Stryker disable all`: mutar un `fontSize` genera ruido, no tests que falten.
 
 Para probar sin la hoja de compartir, la pantalla principal tiene un campo donde
 pegar un enlace directamente.

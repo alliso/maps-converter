@@ -1,4 +1,4 @@
-import { parseSharedContent } from "../parse";
+import { parseGoogleSearch, parseMapUrl, parseSharedContent } from "../parse";
 import type { Coordinates, ParseResult } from "../types";
 
 const SOL: Coordinates = { latitude: 40.416944, longitude: -3.703333 };
@@ -66,6 +66,26 @@ describe("Google Maps links", () => {
     expectNear(place.coordinates, SOL);
   });
 
+  it("reads the comgooglemaps:// scheme", () => {
+    const place = expectPlace(parseSharedContent("comgooglemaps://?q=40.416944,-3.703333&zoom=16"));
+    expectNear(place.coordinates, SOL);
+    expect(place.source).toBe("google");
+  });
+
+  it("flags the legacy goo.gl/maps short link as needing the network", () => {
+    const result = parseSharedContent("https://goo.gl/maps/aBcDeF12345");
+    expect(result.ok && result.needsResolution).toBe(true);
+    expect(result.ok && result.place.source).toBe("google");
+  });
+
+  it("does not treat a non-maps goo.gl link as a place", () => {
+    expect(parseSharedContent("https://goo.gl/aBcDeF12345")).toEqual({
+      ok: false,
+      reason: "unsupported",
+      url: "https://goo.gl/aBcDeF12345",
+    });
+  });
+
   it("flags short links as needing the network", () => {
     const result = parseSharedContent("https://maps.app.goo.gl/aBcDeF12345");
     expect(result.ok).toBe(true);
@@ -117,6 +137,12 @@ describe("Waze links", () => {
       ),
     );
     expectNear(place.coordinates, SOL);
+  });
+
+  it("reads the waze:// scheme", () => {
+    const place = expectPlace(parseSharedContent("waze://?ll=40.416944,-3.703333&navigate=yes"));
+    expectNear(place.coordinates, SOL);
+    expect(place.source).toBe("waze");
   });
 
   it("decodes a geohash short link without the network", () => {
@@ -213,5 +239,62 @@ describe("Google share.google links", () => {
   it("leaves an ordinary Google search alone", () => {
     const result = parseSharedContent("https://www.google.com/search?q=paella+recipe");
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("content we cannot turn into a place", () => {
+  it("rejects a maps URL that names nowhere in particular", () => {
+    expect(parseSharedContent("https://www.waze.com/live-map")).toEqual({
+      ok: false,
+      reason: "unsupported",
+      url: "https://www.waze.com/live-map",
+    });
+  });
+
+  it("rejects a geo: URI with neither coordinates nor a query", () => {
+    expect(parseSharedContent("geo:sinsentido")).toEqual({
+      ok: false,
+      reason: "unsupported",
+      url: "geo:sinsentido",
+    });
+  });
+
+  it("rejects prose too long to be an address", () => {
+    expect(parseSharedContent("a".repeat(251))).toEqual({ ok: false, reason: "unsupported" });
+  });
+
+  it("takes the coordinates out of a long message even when the link is unknown", () => {
+    const place = expectPlace(
+      parseSharedContent("mira https://example.com/x — estamos en 40.416944,-3.703333"),
+    );
+    expectNear(place.coordinates, SOL);
+    expect(place.sourceUrl).toBe("https://example.com/x");
+  });
+});
+
+describe("parseMapUrl", () => {
+  it("ignores anything that is not a URL", () => {
+    expect(parseMapUrl("Puerta del Sol")).toBeUndefined();
+  });
+
+  it("ignores a URL from an app we do not read", () => {
+    expect(parseMapUrl("https://example.com/maps/place/Sol")).toBeUndefined();
+  });
+});
+
+describe("parseGoogleSearch", () => {
+  it("takes the search term as the place", () => {
+    const result = parseGoogleSearch("https://www.google.com/search?q=Chocolater%C3%ADa+San+Gin%C3%A9s");
+    expect(result?.ok && result.place.query).toBe("Chocolatería San Ginés");
+  });
+
+  it("declines a host that is not Google", () => {
+    expect(parseGoogleSearch("https://duckduckgo.com/?q=Sol")).toBeUndefined();
+  });
+
+  it("declines a search with nothing to search for", () => {
+    expect(parseGoogleSearch("https://www.google.com/search?tbm=isch")).toBeUndefined();
+    // A coordinate pair is a place, not a name, and is handled elsewhere.
+    expect(parseGoogleSearch("https://www.google.com/search?q=40.4,-3.7")).toBeUndefined();
   });
 });
