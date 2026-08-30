@@ -42,3 +42,8 @@ yarn-error.*
 
 # Test coverage
 coverage/
+
+# Mutation testing
+.stryker-tmp/
+reports/
+stryker.log

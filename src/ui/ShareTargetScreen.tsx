@@ -299,6 +299,7 @@ type Theme = ReturnType<typeof useTheme>;
 
 function useTheme() {
   const dark = useColorScheme() === "dark";
+  // Stryker disable all: the palette is presentation only, not worth asserting on.
   return {
     background: dark ? "#0b0d10" : "#f6f7f9",
     card: dark ? "#161a20" : "#ffffff",
@@ -307,8 +308,10 @@ function useTheme() {
     muted: dark ? "#8d97a5" : "#697384",
     accent: "#2f6fed",
   };
+  // Stryker restore all
 }
 
+// Stryker disable all: styles carry no behaviour to assert on.
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: 20, gap: 20 },
@@ -361,3 +364,4 @@ const styles = StyleSheet.create({
     padding: 12,
   },
 });
+// Stryker restore all
