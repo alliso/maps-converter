@@ -1,4 +1,4 @@
-import { resolveSharedContent } from "../resolve";
+import { expandShortLink, resolveSharedContent } from "../resolve";
 
 const LONG_URL =
   "https://www.google.com/maps/place/Puerta+del+Sol/@40.416944,-3.703333,17z/data=!4m6!3m5!8m2!3d40.416944!4d-3.703333";
@@ -167,5 +167,86 @@ describe("geocoding a place we only know by name", () => {
 
     expect(geocodeImpl).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("expansions that lead nowhere", () => {
+  it("gives up when the short link expands to something that is not a place", async () => {
+    const result = await resolveSharedContent("https://maps.app.goo.gl/abc123", {
+      fetchImpl: fakeFetch({ url: "https://example.com/article" }),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "unsupported",
+      url: "https://example.com/article",
+    });
+  });
+
+  it("gives up when the interstitial body cannot even be read", async () => {
+    const result = await resolveSharedContent("https://maps.app.goo.gl/abc123", {
+      fetchImpl: fakeFetch({
+        url: "https://maps.app.goo.gl/abc123",
+        text: async () => {
+          throw new Error("connection reset");
+        },
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("expandShortLink", () => {
+  it("returns the URL the redirect chain ended on", async () => {
+    expect(
+      await expandShortLink("https://maps.app.goo.gl/abc123", {
+        fetchImpl: fakeFetch({ url: LONG_URL }),
+      }),
+    ).toBe(LONG_URL);
+  });
+
+  it("returns undefined when nothing redirects and the page names no target", async () => {
+    expect(
+      await expandShortLink("https://maps.app.goo.gl/abc123", {
+        fetchImpl: fakeFetch({
+          url: "https://maps.app.goo.gl/abc123",
+          text: async () => "<html>nada</html>",
+        }),
+      }),
+    ).toBeUndefined();
+  });
+
+  it("gives up rather than hanging when the request times out", async () => {
+    const hangs = jest.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    ) as unknown as typeof fetch;
+
+    expect(
+      await expandShortLink("https://maps.app.goo.gl/abc123", { fetchImpl: hangs, timeoutMs: 1 }),
+    ).toBeUndefined();
+  });
+});
+
+describe("what survives the expansion", () => {
+  it("keeps the name from the message when the expanded link has none", async () => {
+    const result = await resolveSharedContent(
+      "Puerta del Sol\nhttps://maps.app.goo.gl/abc123",
+      { fetchImpl: fakeFetch({ url: "https://www.google.com/maps/@40.416944,-3.703333,17z" }) },
+    );
+
+    expect(result.ok && result.place.label).toBe("Puerta del Sol");
+    expect(result.ok && result.place.coordinates?.latitude).toBeCloseTo(40.416944, 5);
+  });
+
+  it("reads the interstitial even when the response reports no URL at all", async () => {
+    const result = await resolveSharedContent("https://maps.app.goo.gl/abc123", {
+      fetchImpl: fakeFetch({ text: async () => `<html><a href="${LONG_URL}">ir</a></html>` }),
+    });
+
+    expect(result.ok && result.place.coordinates?.latitude).toBeCloseTo(40.416944, 5);
   });
 });
