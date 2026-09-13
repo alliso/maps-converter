@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "main": "index.ts",
   "dependencies": {
-    "expo": "~54.0.37",
+    "expo": "~57.0.22",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.14",
     "expo-linking": "~8.0.12",
-    "expo-share-intent": "^5.1.1",
+    "expo-share-intent": "^8.0.1",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
